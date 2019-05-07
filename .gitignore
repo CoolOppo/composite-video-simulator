@@ -38,5 +38,4 @@ stamp-h1
 
 # IDE
 .ccls-cache/
-*.sublime-project
 *.sublime-workspace

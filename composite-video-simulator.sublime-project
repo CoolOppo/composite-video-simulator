@@ -1,0 +1,36 @@
+{
+	"folders":
+	[
+		{
+			"file_exclude_patterns":
+			[
+				"ffmpeg_average_delay",
+				"ffmpeg_cassette",
+				"ffmpeg_colorkey",
+				"ffmpeg_colormap",
+				"ffmpeg_ntsc",
+				"ffmpeg_posterize",
+				"ffmpeg_scanimate",
+				"ffmpeg_to_composite",
+				"frameblend",
+				"normalize_ts"
+			],
+			"folder_exclude_patterns":
+			[
+				".deps",
+				"autom4te.cache"
+			],
+			"path": "."
+		}
+	],
+	"settings":
+	{
+		"LSP":
+		{
+			"ccls":
+			{
+				"enabled": true
+			}
+		}
+	}
+}
