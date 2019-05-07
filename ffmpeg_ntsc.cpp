@@ -197,6 +197,7 @@ public:
 };
 
 AVRational output_field_rate				 = {60000, 1001};  // NTSC 60Hz default
+AVRational output_aspect_ratio				 = {4, 3};
 int		   output_width						 = 720;
 int		   output_height					 = 480;
 bool	   output_ntsc						 = true;   // NTSC color subcarrier emulation
@@ -335,6 +336,12 @@ public:
 				close_input();
 				return 1;
 			}
+			
+			/* make output dimensions and aspect ratio match input */
+			output_height		= input_avstream_video_codec_context->height;
+			output_width		= input_avstream_video_codec_context->width;
+			output_aspect_ratio = av_guess_sample_aspect_ratio(input_avfmt, input_avstream_video, input_avstream_video_frame);
+
 			input_avstream_video_frame_rgb->format = AV_PIX_FMT_BGRA;
 			input_avstream_video_frame_rgb->height = output_height;
 			input_avstream_video_frame_rgb->width  = output_width;
@@ -2016,10 +2023,10 @@ int main(int argc, char** argv) {
 		}
 
 		avcodec_get_context_defaults3(output_avstream_video_codec_context, avcodec_find_encoder(AV_CODEC_ID_H264));
-		output_avstream_video_codec_context->width  = output_width;
-		output_avstream_video_codec_context->height = output_height;
-		// output_avstream_video_codec_context->sample_aspect_ratio = (AVRational){output_height * 4, output_width * 3};
-		output_avstream_video_codec_context->pix_fmt = AV_PIX_FMT_YUV444P;
+		output_avstream_video_codec_context->width				 = output_width;
+		output_avstream_video_codec_context->height				 = output_height;
+		output_avstream_video_codec_context->sample_aspect_ratio = output_aspect_ratio;
+		output_avstream_video_codec_context->pix_fmt			 = AV_PIX_FMT_YUV444P;
 		av_opt_set_int(output_avstream_video_codec_context, "crf", 12, AV_OPT_SEARCH_CHILDREN);
 		av_opt_set(output_avstream_video_codec_context, "preset", "veryfast", AV_OPT_SEARCH_CHILDREN);
 		av_opt_set(output_avstream_video_codec_context, "tune", "grain", AV_OPT_SEARCH_CHILDREN);
