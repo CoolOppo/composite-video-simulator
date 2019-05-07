@@ -9,14 +9,14 @@ ffmpeg_to_composite
 frameblend
 normalize_ts
 
-autom4te.cache
-aclocal.m4
-.deps
-.deps/*
-*~
-*.o
 *.a
 *.la
+*.o
+*~
+.deps
+.deps/*
+aclocal.m4
+autom4te.cache
 compile
 compile_commands.json
 config.h
@@ -25,12 +25,12 @@ config.log
 config.status
 configure
 configure.in
-Makefile
-Makefile.in
-install-sh
-stamp-h1
+COPYING
 depcomp
 INSTALL
+install-sh
+Makefile
+Makefile.in
 missing
-COPYING
+stamp-h1
 
