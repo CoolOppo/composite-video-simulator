@@ -2249,7 +2249,7 @@ int main(int argc, char** argv) {
 				}
 
 				// field deinterlace
-				{
+				/*{
 					unsigned int field = (current & 1) ^ 1;
 					unsigned int sy;
 					unsigned int dy;
@@ -2286,7 +2286,7 @@ int main(int argc, char** argv) {
 									output_avstream_video_frame[output_avstream_video_frame_index]->width);
 						}
 					}
-				}
+				}*/
 
 				// convert ARGB to whatever the codec demands, and encode
 				output_avstream_video_encode_frame->pts =
