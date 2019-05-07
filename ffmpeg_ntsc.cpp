@@ -196,8 +196,6 @@ public:
 	HiLoSample audiostate;
 };
 
-bool use_422_colorspace =
-	false;  // I would default this to true but Adobe Premiere Pro apparently can't handle 4:2:2 H.264 >:(
 AVRational output_field_rate				 = {60000, 1001};  // NTSC 60Hz default
 int		   output_width						 = 720;
 int		   output_height					 = 480;
@@ -877,8 +875,6 @@ static void help(const char* arg0) {
 	fprintf(stderr, " -vhs-head-switching-point <x> Head switching point (0....1)\n");
 	fprintf(stderr, " -vhs-head-switching-phase <x> Head switching displacement (-1....1)\n");
 	fprintf(stderr, " -vhs-head-switching-noise-level <x> Head switching noise (variation)\n");
-	fprintf(stderr, " -422                      Render in 4:2:2 colorspace\n");
-	fprintf(stderr, " -420                      Render in 4:2:0 colorspace (default)\n");  // dammit Premiere >:(
 	fprintf(stderr, " -nocomp                   Don't apply emulation, just transcode\n");
 	fprintf(stderr, " -ss <t>                   Start transcoding from t seconds\n");
 	fprintf(stderr, " -se <t>                   Stop transcoding at t seconds\n");
@@ -1030,10 +1026,6 @@ static int parse_argv(int argc, char** argv) {
 				a = argv[i++];
 				if (a == nullptr) { return 1; }
 				output_file = a;
-			} else if (strcmp(a, "422") == 0) {
-				use_422_colorspace = true;
-			} else if (strcmp(a, "420") == 0) {
-				use_422_colorspace = false;
 			} else if (strcmp(a, "tvstd") == 0) {
 				a = argv[i++];
 
@@ -2023,15 +2015,15 @@ int main(int argc, char** argv) {
 			return 1;
 		}
 
-		// FIXME: How do I get FFMPEG to write raw YUV 4:2:2?
 		avcodec_get_context_defaults3(output_avstream_video_codec_context, avcodec_find_encoder(AV_CODEC_ID_H264));
-		output_avstream_video_codec_context->width				 = output_width;
-		output_avstream_video_codec_context->height				 = output_height;
-		output_avstream_video_codec_context->sample_aspect_ratio = (AVRational){output_height * 4, output_width * 3};
-		output_avstream_video_codec_context->pix_fmt  = use_422_colorspace ? AV_PIX_FMT_YUV422P : AV_PIX_FMT_YUV420P;
-		output_avstream_video_codec_context->gop_size = 15;
-		output_avstream_video_codec_context->max_b_frames = 0;
-		output_avstream_video_codec_context->time_base	= (AVRational){output_field_rate.den, output_field_rate.num};
+		output_avstream_video_codec_context->width  = output_width;
+		output_avstream_video_codec_context->height = output_height;
+		// output_avstream_video_codec_context->sample_aspect_ratio = (AVRational){output_height * 4, output_width * 3};
+		output_avstream_video_codec_context->pix_fmt = AV_PIX_FMT_YUV444P;
+		av_opt_set_int(output_avstream_video_codec_context, "crf", 12, AV_OPT_SEARCH_CHILDREN);
+		av_opt_set(output_avstream_video_codec_context, "preset", "veryfast", AV_OPT_SEARCH_CHILDREN);
+		av_opt_set(output_avstream_video_codec_context, "tune", "grain", AV_OPT_SEARCH_CHILDREN);
+		output_avstream_video_codec_context->time_base = (AVRational){output_field_rate.den, output_field_rate.num};
 
 		output_avstream_video->time_base = output_avstream_video_codec_context->time_base;
 		if ((output_avfmt->oformat->flags & AVFMT_GLOBALHEADER) != 0) {
@@ -2142,21 +2134,12 @@ int main(int argc, char** argv) {
 			return 1;
 		}
 
-		if (output_avstream_video_codec_context->pix_fmt == AV_PIX_FMT_YUV422P) {
-			memset(output_avstream_video_encode_frame->data[0], 16,
-				output_avstream_video_encode_frame->linesize[0] * output_avstream_video_encode_frame->height);
-			memset(output_avstream_video_encode_frame->data[1], 128,
-				output_avstream_video_encode_frame->linesize[1] * output_avstream_video_encode_frame->height);
-			memset(output_avstream_video_encode_frame->data[2], 128,
-				output_avstream_video_encode_frame->linesize[2] * output_avstream_video_encode_frame->height);
-		} else if (output_avstream_video_codec_context->pix_fmt == AV_PIX_FMT_YUV420P) {
-			memset(output_avstream_video_encode_frame->data[0], 16,
-				output_avstream_video_encode_frame->linesize[0] * (output_avstream_video_encode_frame->height / 2));
-			memset(output_avstream_video_encode_frame->data[1], 128,
-				output_avstream_video_encode_frame->linesize[1] * (output_avstream_video_encode_frame->height / 2));
-			memset(output_avstream_video_encode_frame->data[2], 128,
-				output_avstream_video_encode_frame->linesize[2] * (output_avstream_video_encode_frame->height / 2));
-		}
+		memset(output_avstream_video_encode_frame->data[0], 16,
+			output_avstream_video_encode_frame->linesize[0] * output_avstream_video_encode_frame->height);
+		memset(output_avstream_video_encode_frame->data[1], 128,
+			output_avstream_video_encode_frame->linesize[1] * output_avstream_video_encode_frame->height);
+		memset(output_avstream_video_encode_frame->data[2], 128,
+			output_avstream_video_encode_frame->linesize[2] * output_avstream_video_encode_frame->height);
 	}
 
 	if (output_avstream_video_resampler == nullptr) {
