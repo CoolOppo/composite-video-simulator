@@ -1,3 +1,4 @@
+# Executables
 ffmpeg_average_delay
 ffmpeg_cassette
 ffmpeg_colorkey
@@ -9,6 +10,7 @@ ffmpeg_to_composite
 frameblend
 normalize_ts
 
+# Build
 *.a
 *.la
 *.o
@@ -34,3 +36,7 @@ Makefile.in
 missing
 stamp-h1
 
+# IDE
+.ccls-cache/
+*.sublime-project
+*.sublime-workspace
