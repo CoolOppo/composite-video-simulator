@@ -49,20 +49,20 @@ using namespace std;
 
 /* return a floating point value specifying what to scale the sample
  * value by to reduce it from full volume to dB decibels */
-double dBFS(double dB) {
+float dBFS(float dB) {
 	/* 10 ^ (dB / 20),
 	   based on reversing the formula for converting samples to decibels:
 	   dB = 20.0 * log10(sample);
 	   where "sample" is -1.0 <= x <= 1.0 */
-	return pow(10.0, dB / 20.0);
+	return pow(10.0f, dB / 20.0f);
 }
 
 /* attenuate a sample value by this many dBFS */
 /* so if you want to reduce it by 20dBFS you pass -20 as dB */
-double attenuate_dBFS(double sample, double dB) { return sample * dBFS(dB); }
+float attenuate_dBFS(float sample, float dB) { return sample * dBFS(dB); }
 
 /* opposite: convert sample to decibels */
-double dBFS_measure(double sample) { return 20.0 * log10(sample); }
+float dBFS_measure(float sample) { return 20.0f * log10(sample); }
 
 // lowpass filter
 // you can make it a highpass filter by applying a lowpass then subtracting from source.
@@ -70,33 +70,33 @@ class LowpassFilter
 {
 public:
 	LowpassFilter() {}
-	void setFilter(const double rate /*sample rate of audio*/, const double hz /*cutoff*/) {
+	void setFilter(const float rate /*sample rate of audio*/, const float hz /*cutoff*/) {
 #ifndef M_PI
 #error your math.h does not include M_PI constant
 #endif
-		timeInterval = 1.0 / rate;
-		tau			 = 1 / (hz * 2 * M_PI);
+		timeInterval = 1.0f / rate;
+		tau			 = 1.f / (hz * 2.f * M_PI);
 		cutoff		 = hz;
 		alpha		 = timeInterval / (tau + timeInterval);
 	}
-	void   resetFilter(const double val) { prev = val; }
-	double lowpass(const double sample) {
-		const double stage1 = sample * alpha;
-		const double stage2 = prev - (prev * alpha); /* NTS: Instead of prev * (1.0 - alpha) */
+	void   resetFilter(const float val) { prev = val; }
+	float lowpass(const float sample) {
+		const float stage1 = sample * alpha;
+		const float stage2 = prev - (prev * alpha); /* NTS: Instead of prev * (1.0 - alpha) */
 		return (prev = (stage1 + stage2));			 /* prev = stage1+stage2 then return prev */
 	}
-	double highpass(const double sample) {
-		const double stage1 = sample * alpha;
-		const double stage2 = prev - (prev * alpha); /* NTS: Instead of prev * (1.0 - alpha) */
+	float highpass(const float sample) {
+		const float stage1 = sample * alpha;
+		const float stage2 = prev - (prev * alpha); /* NTS: Instead of prev * (1.0 - alpha) */
 		return sample - (prev = (stage1 + stage2));  /* prev = stage1+stage2 then return (sample - prev) */
 	}
 
 public:
-	double timeInterval{0};
-	double cutoff{0};
-	double alpha{0}; /* timeInterval / (tau + timeInterval) */
-	double prev{0};
-	double tau{0};
+	float timeInterval{0};
+	float cutoff{0};
+	float alpha{0}; /* timeInterval / (tau + timeInterval) */
+	float prev{0};
+	float tau{0};
 };
 
 class HiLoPair
@@ -104,11 +104,11 @@ class HiLoPair
 public:
 	LowpassFilter hi, lo;  // highpass, lowpass
 public:
-	void setFilter(const double rate /*sample rate of audio*/, const double low_hz, const double high_hz) {
+	void setFilter(const float rate /*sample rate of audio*/, const float low_hz, const float high_hz) {
 		lo.setFilter(rate, low_hz);
 		hi.setFilter(rate, high_hz);
 	}
-	double filter(const double sample) { return hi.highpass(lo.lowpass(sample)); /* first lowpass, then highpass */ }
+	float filter(const float sample) { return hi.highpass(lo.lowpass(sample)); /* first lowpass, then highpass */ }
 };
 
 class HiLoPass : public vector<HiLoPair>
@@ -117,10 +117,10 @@ public:
 	HiLoPass() {}
 
 public:
-	void setFilter(const double rate /*sample rate of audio*/, const double low_hz, const double high_hz) {
+	void setFilter(const float rate /*sample rate of audio*/, const float low_hz, const float high_hz) {
 		for (size_t i = 0; i < size(); i++) { (*this)[i].setFilter(rate, low_hz, high_hz); }
 	}
-	double filter(double sample) {
+	float filter(float sample) {
 		for (size_t i = 0; i < size(); i++) { sample = (*this)[i].lo.lowpass(sample); }
 		for (size_t i = 0; i < size(); i++) { sample = (*this)[i].hi.highpass(sample); }
 		return sample;
@@ -144,7 +144,7 @@ public:
 		assert(size() >= channels);
 		for (size_t i = 0; i < size(); i++) { (*this)[i].init(passes); }
 	}
-	void setFilter(const double rate /*sample rate of audio*/, const double low_hz, const double high_hz) {
+	void setFilter(const float rate /*sample rate of audio*/, const float low_hz, const float high_hz) {
 		for (size_t i = 0; i < size(); i++) { (*this)[i].setFilter(rate, low_hz, high_hz); }
 	}
 };
@@ -160,14 +160,14 @@ public:
 			channels = _channels;
 		}
 	}
-	void setCutoff(const double _low_cutoff, const double _high_cutoff) {
+	void setCutoff(const float _low_cutoff, const float _high_cutoff) {
 		if (low_cutoff != _low_cutoff || high_cutoff != _high_cutoff) {
 			clear();
 			low_cutoff  = _low_cutoff;
 			high_cutoff = _high_cutoff;
 		}
 	}
-	void setRate(const double _rate) {
+	void setRate(const float _rate) {
 		if (rate != _rate) {
 			clear();
 			rate = _rate;
@@ -188,11 +188,11 @@ public:
 	}
 
 public:
-	double	 rate{0};
+	float	 rate{0.f};
 	size_t	 passes{0};
 	size_t	 channels{0};
-	double	 low_cutoff{0};
-	double	 high_cutoff{0};
+	float	 low_cutoff{0.f};
+	float	 high_cutoff{0.f};
 	HiLoSample audiostate;
 };
 
@@ -400,7 +400,7 @@ public:
 
 				if (pt < 0) {
 					adj_time = -t;
-				} else if ((t + 1.5) < pt) {  // time code jumps backwards (1.5 is safe for DVD timecode resets)
+				} else if ((t + 1.5f) < pt) {  // time code jumps backwards (1.5 is safe for DVD timecode resets)
 					adj_time += pt - t;
 					fprintf(stderr, "Time code jump backwards %.6f->%.6f. adj_time=%.6f\n", pt, t, adj_time);
 				} else if (t > (pt + 5)) {  // time code jumps forwards
@@ -713,8 +713,8 @@ public:
 	signed long long   next_dts;
 	AVPacket		   avpkt{};
 	bool			   avpkt_valid;
-	double			   adj_time{};
-	double			   t{}, pt{};
+	float			   adj_time{};
+	float			   t{}, pt{};
 };
 
 std::vector<InputFile> input_files;
@@ -756,19 +756,19 @@ HiLoComboPass audio_hilopass;
 LowpassFilter audio_linear_preemphasis_pre[2];
 LowpassFilter audio_linear_preemphasis_post[2];
 
-double composite_preemphasis =
-	0;  // analog artifacts related to anything that affects the raw composite signal i.e. CATV modulation
-double composite_preemphasis_cut = 1000000;
+float composite_preemphasis =
+	0.f;  // analog artifacts related to anything that affects the raw composite signal i.e. CATV modulation
+float composite_preemphasis_cut = 1000000.f;
 
-double vhs_out_sharpen = 1.5;
+float vhs_out_sharpen = 1.5f;
 
 bool   vhs_head_switching = false;
-double vhs_head_switching_point =
-	1.0 - ((4.5 + 0.01 /*slight error, like most VHS tapes*/) / 262.5);  // 4 scanlines NTSC up from vsync
-double vhs_head_switching_phase =
-	((1.0 - 0.01 /*slight error, like most VHS tapes*/) / 262.5);  // 4 scanlines NTSC up from vsync
-double vhs_head_switching_phase_noise =
-	(((1.0 / 500) /*slight error, like most VHS tapes*/) / 262.5);  // 1/500th of a scanline
+float vhs_head_switching_point =
+	1.0f - ((4.5f + 0.01f /*slight error, like most VHS tapes*/) / 262.5f);  // 4 scanlines NTSC up from vsync
+float vhs_head_switching_phase =
+	((1.0f - 0.01f /*slight error, like most VHS tapes*/) / 262.5f);  // 4 scanlines NTSC up from vsync
+float vhs_head_switching_phase_noise =
+	(((1.0f / 500.f) /*slight error, like most VHS tapes*/) / 262.5f);  // 1/500th of a scanline
 
 bool composite_in_chroma_lowpass	   = true;  // apply chroma lowpass before composite encode
 bool composite_out_chroma_lowpass	  = true;
@@ -782,13 +782,13 @@ int	video_chroma_loss		 = 0;
 int	video_noise				 = 2;
 int	subcarrier_amplitude		 = 50;
 int	subcarrier_amplitude_back = 50;
-double output_audio_hiss_db		 = -72;
-double output_audio_linear_buzz =
-	-42;  // how loud the "buzz" is audible in dBFS (S/N). Ever notice on old VHS tapes (prior to Hi-Fi) you can almost
+float output_audio_hiss_db		 = -72.f;
+float output_audio_linear_buzz =
+	-42.f;  // how loud the "buzz" is audible in dBFS (S/N). Ever notice on old VHS tapes (prior to Hi-Fi) you can almost
 		  // hear the video signal sync pulses in the audio?
-double output_audio_highpass = 20;	 // highpass to filter out below 20Hz
-double output_audio_lowpass  = 20000;  // lowpass to filter out above 20KHz
-double vhs_linear_high_boost = 0.25;
+float output_audio_highpass = 20.f;	 // highpass to filter out below 20Hz
+float output_audio_lowpass  = 20000.f;  // lowpass to filter out above 20KHz
+float vhs_linear_high_boost = 0.25f;
 // NTS:
 //   VHS Hi-Fi: 20Hz - 20KHz                  (70dBFS S/N)
 //   VHS SP:    100Hz - 10KHz                 (42dBFS S/N)
@@ -910,18 +910,18 @@ void composite_audio_process(
 	int16_t* audio, unsigned int samples) {  // number of channels = output_audio_channels, sample rate =
 											 // output_audio_rate. audio is interleaved.
 	assert(audio_hilopass.audiostate.size() >= output_audio_channels);
-	double linear_buzz = dBFS(output_audio_linear_buzz);
-	double hsync_hz	= output_ntsc ? /*NTSC*/ 15734 : /*PAL*/ 15625;
-	int	vsync_lines = output_ntsc ? /*NTSC*/ 525 : /*PAL*/ 625;
-	int	vpulse_end  = output_ntsc ? /*NTSC*/ 10 : /*PAL*/ 12;
-	double hpulse_end =
-		output_ntsc ? /*NTSC*/ (hsync_hz * (4.7 /*us*/ / 1000000)) : /*PAL*/ (hsync_hz * (4.0 /*us*/ / 1000000));
+	float linear_buzz = dBFS(output_audio_linear_buzz);
+	float hsync_hz	= output_ntsc ? /*NTSC*/ 15734.f : /*PAL*/ 15625.f;
+	int	vsync_lines = output_ntsc ? /*NTSC*/ 525.f : /*PAL*/ 625.f;
+	int	vpulse_end  = output_ntsc ? /*NTSC*/ 10.f : /*PAL*/ 12.f;
+	float hpulse_end =
+		output_ntsc ? /*NTSC*/ (hsync_hz * (4.7f /*us*/ / 1000000.f)) : /*PAL*/ (hsync_hz * (4.0f /*us*/ / 1000000.f));
 
 	for (unsigned int s = 0; s < samples; s++, audio += output_audio_channels) {
 		for (unsigned int c = 0; c < output_audio_channels; c++) {
-			double s;
+			float s;
 
-			s = static_cast<double>(audio[c]) / 32768;
+			s = static_cast<float>(audio[c]) / 32768.f;
 
 			/* lowpass filter */
 			s = audio_hilopass.audiostate[c].filter(s);
@@ -934,14 +934,14 @@ void composite_audio_process(
 			}
 
 			/* that faint "buzzing" noise on linear tracks because of audio/video crosstalk */
-			if (!output_vhs_hifi && linear_buzz > 0.000000001) {
+			if (!output_vhs_hifi && linear_buzz > 0.000000001f) {
 				const unsigned int oversample = 16;
 				for (unsigned int oi = 0; oi < oversample; oi++) {
-					double t = (((static_cast<double>(audio_proc_count) * oversample) + oi) * hsync_hz) /
+					float t = (((static_cast<float>(audio_proc_count) * oversample) + oi) * hsync_hz) /
 							   output_audio_rate / oversample;
-					double hpos  = fmod(t, 1.0);
+					float hpos  = fmod(t, 1.0f);
 					int	vline = static_cast<int>(
-						   fmod(floor(t + 0.0001 /*fudge*/ - hpos), static_cast<double>(vsync_lines) / 2));
+						   fmod(floor(t + 0.0001f /*fudge*/ - hpos), static_cast<float>(vsync_lines) / 2.f));
 					bool pulse = false;
 
 					if (hpos < hpulse_end) {
@@ -956,15 +956,15 @@ void composite_audio_process(
 			}
 
 			/* analog limiting (when the signal is too loud) */
-			if (s > 1.0) {
-				s = 1.0;
-			} else if (s < -1.0) {
-				s = -1.0;
+			if (s > 1.0f) {
+				s = 1.0f;
+			} else if (s < -1.0f) {
+				s = -1.0f;
 			}
 
 			/* hiss */
 			if (output_audio_hiss_level != 0) {
-				s += (static_cast<double>(
+				s += (static_cast<float>(
 						 (static_cast<int>(static_cast<unsigned int>(rand()) % ((output_audio_hiss_level * 2) + 1))) -
 						 output_audio_hiss_level)) /
 					 20000;
@@ -1341,20 +1341,20 @@ void output_frame(AVFrame* frame, unsigned long long field_number) {
 }
 
 void RGB_to_YIQ(int& Y, int& I, int& Q, int r, int g, int b) {
-	double dY;
+	float dY;
 
-	dY = (0.30 * r) + (0.59 * g) + (0.11 * b);
+	dY = (0.30f * r) + (0.59f * g) + (0.11f * b);
 
-	Y = static_cast<int>(256 * dY);
-	I = static_cast<int>(256 * ((-0.27 * (b - dY)) + (0.74 * (r - dY))));
-	Q = static_cast<int>(256 * ((0.41 * (b - dY)) + (0.48 * (r - dY))));
+	Y = static_cast<int>(256.f * dY);
+	I = static_cast<int>(256.f * ((-0.27f * (b - dY)) + (0.74f * (r - dY))));
+	Q = static_cast<int>(256.f * ((0.41f * (b - dY)) + (0.48f * (r - dY))));
 }
 
 void YIQ_to_RGB(int& r, int& g, int& b, int Y, int I, int Q) {
 	// FIXME
-	r = static_cast<int>(((1.000 * Y) + (0.956 * I) + (0.621 * Q)) / 256);
-	g = static_cast<int>(((1.000 * Y) + (-0.272 * I) + (-0.647 * Q)) / 256);
-	b = static_cast<int>(((1.000 * Y) + (-1.106 * I) + (1.703 * Q)) / 256);
+	r = static_cast<int>(((1.000f * Y) + (0.956f * I) + (0.621f * Q)) / 256);
+	g = static_cast<int>(((1.000f * Y) + (-0.272f * I) + (-0.647f * Q)) / 256);
+	b = static_cast<int>(((1.000f * Y) + (-1.106f * I) + (1.703f * Q)) / 256);
 	if (r < 0) {
 		r = 0;
 	} else if (r > 255) {
@@ -1383,16 +1383,16 @@ void composite_lowpass_tv(
 			for (y = field; y < dstframe->height; y += 2) {
 				int*		  P = ((p == 1) ? fI : fQ) + (dstframe->width * y);
 				LowpassFilter lp[3];
-				double		  cutoff;
+				float		  cutoff;
 				int			  delay;
-				double		  s;
+				float		  s;
 
-				cutoff = 2600000;
+				cutoff = 2600000.f;
 				delay  = 1;
 
 				for (auto& f : lp) {
-					f.setFilter((315000000.00 * 4) / 88, cutoff);  // 315/88 Mhz rate * 4
-					f.resetFilter(0);
+					f.setFilter((315000000.00f * 4.f) / 88.f, cutoff);  // 315/88 Mhz rate * 4
+					f.resetFilter(0.f);
 				}
 
 				for (x = 0; x < dstframe->width; x++) {
@@ -1415,17 +1415,17 @@ void composite_lowpass(
 			for (y = field; y < dstframe->height; y += 2) {
 				int*		  P = ((p == 1) ? fI : fQ) + (dstframe->width * y);
 				LowpassFilter lp[3];
-				double		  cutoff;
+				float		  cutoff;
 				int			  delay;
-				double		  s;
+				float		  s;
 
 				// NTSC YIQ bandwidth: I=1.3MHz Q=0.6MHz
-				cutoff = (p == 1) ? 1300000 : 600000;
+				cutoff = (p == 1) ? 1300000.f : 600000.f;
 				delay  = (p == 1) ? 2 : 4;
 
 				for (auto& f : lp) {
-					f.setFilter((315000000.00 * 4) / 88, cutoff);  // 315/88 Mhz rate * 4
-					f.resetFilter(0);
+					f.setFilter((315000000.00f * 4.f) / 88.f, cutoff);  // 315/88 Mhz rate * 4
+					f.resetFilter(0.f);
 				}
 
 				for (x = 0; x < dstframe->width; x++) {
@@ -1615,10 +1615,10 @@ void composite_layer(
 		for (y = field; y < dstframe->height; y += 2) {
 			int*		  Y = fY + (y * dstframe->width);
 			LowpassFilter pre;
-			double		  s;
+			float		  s;
 
-			pre.setFilter((315000000.00 * 4) / 88, composite_preemphasis_cut);  // 315/88 Mhz rate * 4  vs 1.0MHz cutoff
-			pre.resetFilter(16);
+			pre.setFilter((315000000.00f * 4.f) / 88.f, composite_preemphasis_cut);  // 315/88 Mhz rate * 4  vs 1.0MHz cutoff
+			pre.resetFilter(16.f);
 			for (x = 0; x < dstframe->width; x++) {
 				s = Y[x];
 				s += pre.highpass(s) * composite_preemphasis;
@@ -1651,30 +1651,30 @@ void composite_layer(
 		unsigned int p;
 		unsigned int x2;
 		unsigned int shy   = 0;
-		double		 noise = 0;
+		float		 noise = 0.f;
 		int			 shif;
 		int			 ishif;
 		int			 y;
-		double		 t;
+		float		 t;
 
 		if (vhs_head_switching_phase_noise != 0) {
 			unsigned int x = static_cast<unsigned int>(rand()) * static_cast<unsigned int>(rand()) *
 							 static_cast<unsigned int>(rand()) * static_cast<unsigned int>(rand());
 			x %= 2000000000U;
-			noise = (static_cast<double>(x) / 1000000000U) - 1.0;
+			noise = (static_cast<float>(x) / 1000000000U) - 1.0f;
 			noise *= vhs_head_switching_phase_noise;
 		}
 
 		if (output_ntsc) {
-			t = twidth * 262.5;
+			t = twidth * 262.5f;
 		} else {
-			t = twidth * 312.5;
+			t = twidth * 312.5f;
 		}
 
-		p = static_cast<unsigned int>(fmod(vhs_head_switching_point + noise, 1.0) * t);
+		p = static_cast<unsigned int>(fmod(vhs_head_switching_point + noise, 1.0f) * t);
 		y = ((p / twidth) * 2) + field;
 
-		p = static_cast<unsigned int>(fmod(vhs_head_switching_phase + noise, 1.0) * t);
+		p = static_cast<unsigned int>(fmod(vhs_head_switching_phase + noise, 1.0f) * t);
 		x = p % twidth;
 
 		if (output_ntsc) {
@@ -1751,13 +1751,13 @@ void composite_layer(
 	if (video_chroma_phase_noise != 0) {
 		int	noise	 = 0;
 		int	noise_mod = (video_chroma_noise * 255) / 100;
-		double pi;
-		double u;
-		double v;
-		double u_;
-		double v_;
-		double sinpi;
-		double cospi;
+		float pi;
+		float u;
+		float v;
+		float u_;
+		float v_;
+		float sinpi;
+		float cospi;
 
 		for (y = field; y < dstframe->height; y += 2) {
 			int* U = fI + (y * dstframe->width);
@@ -1766,7 +1766,7 @@ void composite_layer(
 			noise += (static_cast<int>(static_cast<unsigned int>(rand()) % ((video_chroma_phase_noise * 2) + 1))) -
 					 video_chroma_phase_noise;
 			noise /= 2;
-			pi = (static_cast<double>(noise) * M_PI) / 100;
+			pi = (static_cast<float>(noise) * M_PI) / 100.f;
 
 			sinpi = sin(pi);
 			cospi = cos(pi);
@@ -1790,24 +1790,24 @@ void composite_layer(
 	//      Slightly blurry, some color artifacts, and edges will have that "buzz" effect, but still a good picture.
 
 	if (emulating_vhs) {
-		double luma_cut;
-		double chroma_cut;
+		float luma_cut;
+		float chroma_cut;
 		int	chroma_delay;
 
 		switch (output_vhs_tape_speed) {
 			case VHS_SP:
-				luma_cut	 = 2400000;  // 3.0MHz x 80%
-				chroma_cut   = 320000;   // 400KHz x 80%
+				luma_cut	 = 2400000.f;  // 3.0MHz x 80%
+				chroma_cut   = 320000.f;   // 400KHz x 80%
 				chroma_delay = 9;
 				break;
 			case VHS_LP:
-				luma_cut	 = 1900000;  // ..
-				chroma_cut   = 300000;   // 375KHz x 80%
+				luma_cut	 = 1900000.f;  // ..
+				chroma_cut   = 300000.f;   // 375KHz x 80%
 				chroma_delay = 12;
 				break;
 			case VHS_EP:
-				luma_cut	 = 1400000;  // ..
-				chroma_cut   = 280000;   // 350KHz x 80%
+				luma_cut	 = 1400000.f;  // ..
+				chroma_cut   = 280000.f;   // 350KHz x 80%
 				chroma_delay = 14;
 				break;
 			default: abort();
@@ -1818,18 +1818,18 @@ void composite_layer(
 			int*		  Y = fY + (y * dstframe->width);
 			LowpassFilter lp[3];
 			LowpassFilter pre;
-			double		  s;
+			float		  s;
 
 			for (auto& f : lp) {
-				f.setFilter((315000000.00 * 4) / 88, luma_cut);  // 315/88 Mhz rate * 4  vs 3.0MHz cutoff
+				f.setFilter((315000000.00f * 4.f) / 88.f, luma_cut);  // 315/88 Mhz rate * 4  vs 3.0MHz cutoff
 				f.resetFilter(16);
 			}
-			pre.setFilter((315000000.00 * 4) / 88, luma_cut);  // 315/88 Mhz rate * 4  vs 1.0MHz cutoff
-			pre.resetFilter(16);
+			pre.setFilter((315000000.00f * 4.f) / 88.f, luma_cut);  // 315/88 Mhz rate * 4  vs 1.0MHz cutoff
+			pre.resetFilter(16.f);
 			for (x = 0; x < dstframe->width; x++) {
 				s = Y[x];
 				for (auto& f : lp) { s = f.lowpass(s); }
-				s += pre.highpass(s) * 1.6;
+				s += pre.highpass(s) * 1.6f;
 				Y[x] = s;
 			}
 		}
@@ -1840,15 +1840,15 @@ void composite_layer(
 			int*		  V = fQ + (y * dstframe->width);
 			LowpassFilter lpU[3];
 			LowpassFilter lpV[3];
-			double		  s;
+			float		  s;
 
 			for (unsigned int f = 0; f < 3; f++) {
-				lpU[f].setFilter((315000000.00 * 4) / 88,
+				lpU[f].setFilter((315000000.00f * 4.f) / 88.f,
 					chroma_cut);  // 315/88 Mhz rate * 4 (divide by 2 for 4:2:2) vs 400KHz cutoff
 				lpU[f].resetFilter(0);
-				lpV[f].setFilter((315000000.00 * 4) / 88,
+				lpV[f].setFilter((315000000.00f * 4.f) / 88.f,
 					chroma_cut);  // 315/88 Mhz rate * 4 (divide by 2 for 4:2:2) vs 400KHz cutoff
-				lpV[f].resetFilter(0);
+				lpV[f].resetFilter(0.f);
 			}
 			for (x = 0; x < dstframe->width; x++) {
 				s = U[x];
@@ -1895,12 +1895,12 @@ void composite_layer(
 			for (y = field; y < dstframe->height; y += 2) {
 				int*		  Y = fY + (y * dstframe->width);
 				LowpassFilter lp[3];
-				double		  s;
-				double		  ts;
+				float		  s;
+				float		  ts;
 
 				for (auto& f : lp) {
-					f.setFilter((315000000.00 * 4) / 88, luma_cut * 4);  // 315/88 Mhz rate * 4  vs 3.0MHz cutoff
-					f.resetFilter(0);
+					f.setFilter((315000000.00f * 4.f) / 88.f, luma_cut * 4.f);  // 315/88 Mhz rate * 4  vs 3.0MHz cutoff
+					f.resetFilter(0.f);
 				}
 				for (x = 0; x < dstframe->width; x++) {
 					s = ts = Y[x];
