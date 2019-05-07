@@ -1,4 +1,14 @@
+ffmpeg_average_delay
+ffmpeg_cassette
+ffmpeg_colorkey
+ffmpeg_colormap
+ffmpeg_ntsc
+ffmpeg_posterize
+ffmpeg_scanimate
 ffmpeg_to_composite
+frameblend
+normalize_ts
+
 autom4te.cache
 aclocal.m4
 .deps
@@ -8,6 +18,7 @@ aclocal.m4
 *.a
 *.la
 compile
+compile_commands.json
 config.h
 config.h.in
 config.log
