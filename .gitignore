@@ -11,31 +11,11 @@ frameblend
 normalize_ts
 
 # Build
-*.a
-*.la
-*.o
-*~
-.deps
-.deps/*
-aclocal.m4
-autom4te.cache
-compile
 compile_commands.json
-config.h
-config.h.in
-config.log
-config.status
-configure
-configure.in
-COPYING
-depcomp
-INSTALL
-install-sh
-Makefile
-Makefile.in
-missing
-stamp-h1
+Release/
+Debug/
 
 # IDE
 .ccls-cache/
+.idea/
 *.sublime-workspace
