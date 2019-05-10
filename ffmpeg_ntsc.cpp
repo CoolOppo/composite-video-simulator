@@ -588,7 +588,7 @@ public:
 				input_avstream_video_frame_rgb->width, input_avstream_video_frame_rgb->height,
 				static_cast<AVPixelFormat>(input_avstream_video_frame_rgb->format),
 				// opt
-				SWS_BILINEAR, nullptr, nullptr, nullptr);
+				SWS_FAST_BILINEAR, nullptr, nullptr, nullptr);
 
 			if (input_avstream_video_resampler != nullptr) {
 				fprintf(stderr, "sws_getContext new context\n");
@@ -2027,9 +2027,9 @@ int main(int argc, char** argv) {
 		output_avstream_video_codec_context->height				 = output_height;
 		output_avstream_video_codec_context->sample_aspect_ratio = output_aspect_ratio;
 		output_avstream_video_codec_context->pix_fmt			 = AV_PIX_FMT_YUV444P;
-		av_opt_set_int(output_avstream_video_codec_context, "crf", 12, AV_OPT_SEARCH_CHILDREN);
-		av_opt_set(output_avstream_video_codec_context, "preset", "veryfast", AV_OPT_SEARCH_CHILDREN);
-		av_opt_set(output_avstream_video_codec_context, "tune", "grain", AV_OPT_SEARCH_CHILDREN);
+		av_opt_set_int(output_avstream_video_codec_context, "crf", 0, AV_OPT_SEARCH_CHILDREN);
+		av_opt_set(output_avstream_video_codec_context, "preset", "ultrafast", AV_OPT_SEARCH_CHILDREN);
+		av_opt_set(output_avstream_video_codec_context, "tune", "zerolatency", AV_OPT_SEARCH_CHILDREN);
 		output_avstream_video_codec_context->time_base = (AVRational){output_field_rate.den, output_field_rate.num};
 
 		output_avstream_video->time_base = output_avstream_video_codec_context->time_base;
@@ -2158,7 +2158,7 @@ int main(int argc, char** argv) {
 			output_avstream_video_encode_frame->width, output_avstream_video_encode_frame->height,
 			static_cast<AVPixelFormat>(output_avstream_video_encode_frame->format),
 			// opt
-			SWS_BILINEAR, nullptr, nullptr, nullptr);
+			SWS_FAST_BILINEAR, nullptr, nullptr, nullptr);
 		if (output_avstream_video_resampler == nullptr) {
 			fprintf(stderr, "Failed to alloc ARGB -> codec converter\n");
 			return 1;
