@@ -79,16 +79,16 @@ public:
 		cutoff		 = hz;
 		alpha		 = timeInterval / (tau + timeInterval);
 	}
-	void   resetFilter(const float val) { prev = val; }
+	void  resetFilter(const float val) { prev = val; }
 	float lowpass(const float sample) {
 		const float stage1 = sample * alpha;
 		const float stage2 = prev - (prev * alpha); /* NTS: Instead of prev * (1.0 - alpha) */
-		return (prev = (stage1 + stage2));			 /* prev = stage1+stage2 then return prev */
+		return (prev = (stage1 + stage2));			/* prev = stage1+stage2 then return prev */
 	}
 	float highpass(const float sample) {
 		const float stage1 = sample * alpha;
 		const float stage2 = prev - (prev * alpha); /* NTS: Instead of prev * (1.0 - alpha) */
-		return sample - (prev = (stage1 + stage2));  /* prev = stage1+stage2 then return (sample - prev) */
+		return sample - (prev = (stage1 + stage2)); /* prev = stage1+stage2 then return (sample - prev) */
 	}
 
 public:
@@ -188,11 +188,11 @@ public:
 	}
 
 public:
-	float	 rate{0.f};
+	float	  rate{0.f};
 	size_t	 passes{0};
 	size_t	 channels{0};
-	float	 low_cutoff{0.f};
-	float	 high_cutoff{0.f};
+	float	  low_cutoff{0.f};
+	float	  high_cutoff{0.f};
 	HiLoSample audiostate;
 };
 
@@ -336,11 +336,12 @@ public:
 				close_input();
 				return 1;
 			}
-			
+
 			/* make output dimensions and aspect ratio match input */
-			output_height		= input_avstream_video_codec_context->height;
-			output_width		= input_avstream_video_codec_context->width;
-			output_aspect_ratio = av_guess_sample_aspect_ratio(input_avfmt, input_avstream_video, input_avstream_video_frame);
+			output_height = input_avstream_video_codec_context->height;
+			output_width  = input_avstream_video_codec_context->width;
+			output_aspect_ratio =
+				av_guess_sample_aspect_ratio(input_avfmt, input_avstream_video, input_avstream_video_frame);
 
 			input_avstream_video_frame_rgb->format = AV_PIX_FMT_BGRA;
 			input_avstream_video_frame_rgb->height = output_height;
@@ -762,7 +763,7 @@ float composite_preemphasis_cut = 1000000.f;
 
 float vhs_out_sharpen = 1.5f;
 
-bool   vhs_head_switching = false;
+bool  vhs_head_switching = false;
 float vhs_head_switching_point =
 	1.0f - ((4.5f + 0.01f /*slight error, like most VHS tapes*/) / 262.5f);  // 4 scanlines NTSC up from vsync
 float vhs_head_switching_phase =
@@ -774,19 +775,19 @@ bool composite_in_chroma_lowpass	   = true;  // apply chroma lowpass before comp
 bool composite_out_chroma_lowpass	  = true;
 bool composite_out_chroma_lowpass_lite = true;
 
-int	video_yc_recombine		 = 0;  // additional Y/C combine/sep phases (testing)
-int	video_color_fields		 = 4;  // NTSC color framing
-int	video_chroma_noise		 = 0;
-int	video_chroma_phase_noise  = 0;
-int	video_chroma_loss		 = 0;
-int	video_noise				 = 2;
-int	subcarrier_amplitude		 = 50;
-int	subcarrier_amplitude_back = 50;
-float output_audio_hiss_db		 = -72.f;
+int   video_yc_recombine		= 0;  // additional Y/C combine/sep phases (testing)
+int   video_color_fields		= 4;  // NTSC color framing
+int   video_chroma_noise		= 0;
+int   video_chroma_phase_noise  = 0;
+int   video_chroma_loss			= 0;
+int   video_noise				= 2;
+int   subcarrier_amplitude		= 50;
+int   subcarrier_amplitude_back = 50;
+float output_audio_hiss_db		= -72.f;
 float output_audio_linear_buzz =
-	-42.f;  // how loud the "buzz" is audible in dBFS (S/N). Ever notice on old VHS tapes (prior to Hi-Fi) you can almost
-		  // hear the video signal sync pulses in the audio?
-float output_audio_highpass = 20.f;	 // highpass to filter out below 20Hz
+	-42.f;  // how loud the "buzz" is audible in dBFS (S/N). Ever notice on old VHS tapes (prior to Hi-Fi) you can
+			// almost hear the video signal sync pulses in the audio?
+float output_audio_highpass = 20.f;		// highpass to filter out below 20Hz
 float output_audio_lowpass  = 20000.f;  // lowpass to filter out above 20KHz
 float vhs_linear_high_boost = 0.25f;
 // NTS:
@@ -912,8 +913,8 @@ void composite_audio_process(
 	assert(audio_hilopass.audiostate.size() >= output_audio_channels);
 	float linear_buzz = dBFS(output_audio_linear_buzz);
 	float hsync_hz	= output_ntsc ? /*NTSC*/ 15734.f : /*PAL*/ 15625.f;
-	int	vsync_lines = output_ntsc ? /*NTSC*/ 525.f : /*PAL*/ 625.f;
-	int	vpulse_end  = output_ntsc ? /*NTSC*/ 10.f : /*PAL*/ 12.f;
+	int   vsync_lines = output_ntsc ? /*NTSC*/ 525.f : /*PAL*/ 625.f;
+	int   vpulse_end  = output_ntsc ? /*NTSC*/ 10.f : /*PAL*/ 12.f;
 	float hpulse_end =
 		output_ntsc ? /*NTSC*/ (hsync_hz * (4.7f /*us*/ / 1000000.f)) : /*PAL*/ (hsync_hz * (4.0f /*us*/ / 1000000.f));
 
@@ -938,10 +939,10 @@ void composite_audio_process(
 				const unsigned int oversample = 16;
 				for (unsigned int oi = 0; oi < oversample; oi++) {
 					float t = (((static_cast<float>(audio_proc_count) * oversample) + oi) * hsync_hz) /
-							   output_audio_rate / oversample;
+							  output_audio_rate / oversample;
 					float hpos  = fmod(t, 1.0f);
-					int	vline = static_cast<int>(
-						   fmod(floor(t + 0.0001f /*fudge*/ - hpos), static_cast<float>(vsync_lines) / 2.f));
+					int   vline = static_cast<int>(
+						  fmod(floor(t + 0.0001f /*fudge*/ - hpos), static_cast<float>(vsync_lines) / 2.f));
 					bool pulse = false;
 
 					if (hpos < hpulse_end) {
@@ -1617,7 +1618,8 @@ void composite_layer(
 			LowpassFilter pre;
 			float		  s;
 
-			pre.setFilter((315000000.00f * 4.f) / 88.f, composite_preemphasis_cut);  // 315/88 Mhz rate * 4  vs 1.0MHz cutoff
+			pre.setFilter(
+				(315000000.00f * 4.f) / 88.f, composite_preemphasis_cut);  // 315/88 Mhz rate * 4  vs 1.0MHz cutoff
 			pre.resetFilter(16.f);
 			for (x = 0; x < dstframe->width; x++) {
 				s = Y[x];
@@ -1749,8 +1751,8 @@ void composite_layer(
 		}
 	}
 	if (video_chroma_phase_noise != 0) {
-		int	noise	 = 0;
-		int	noise_mod = (video_chroma_noise * 255) / 100;
+		int   noise		= 0;
+		int   noise_mod = (video_chroma_noise * 255) / 100;
 		float pi;
 		float u;
 		float v;
@@ -1792,7 +1794,7 @@ void composite_layer(
 	if (emulating_vhs) {
 		float luma_cut;
 		float chroma_cut;
-		int	chroma_delay;
+		int   chroma_delay;
 
 		switch (output_vhs_tape_speed) {
 			case VHS_SP:

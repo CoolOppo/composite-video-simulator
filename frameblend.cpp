@@ -255,7 +255,7 @@ public:
 				if (got_video) fprintf(stderr, "Video content lost\n");
 				//				AVRational m = (AVRational){output_field_rate.den, output_field_rate.num};
 				//				av_packet_rescale_ts(&avpkt,input_avstream_video->time_base,m); // convert to FIELD
-				//number
+				// number
 				handle_frame(/*&*/ avpkt);  // will set got_video
 				break;
 			}
