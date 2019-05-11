@@ -859,8 +859,8 @@ static void help(const char* arg0) {
 	fprintf(stderr, " -subcarrier-amp <0...100> Subcarrier amplitude (0 to 100 percent of luma)\n");
 	fprintf(stderr, " -noise <0..100>           Noise amplitude\n");
 	fprintf(stderr, " -chroma-noise <0..100>    Chroma noise amplitude\n");
-	fprintf(stderr, " -audio-hiss <-120..0>     Audio hiss in decibels (0=100%)\n");
-	fprintf(stderr, " -vhs-linear-video-crosstalk <x> Emulate video crosstalk in audio. Loudness in dBFS (0=100%)\n");
+	fprintf(stderr, " -audio-hiss <-120..0>     Audio hiss in decibels (0=100%%)\n");
+	fprintf(stderr, " -vhs-linear-video-crosstalk <x> Emulate video crosstalk in audio. Loudness in dBFS (0=100%%)\n");
 	fprintf(stderr, " -chroma-phase-noise <x>   Chroma phase noise (0...100)\n");
 	fprintf(stderr, " -vhs-chroma-vblend <0|1>  Vertically blend chroma scanlines (as VHS format does)\n");
 	fprintf(stderr, " -vhs-svideo <0|1>         Render VHS as if S-Video (luma and chroma separate out of VHS)\n");
