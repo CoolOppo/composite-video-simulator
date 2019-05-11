@@ -46,6 +46,10 @@ using namespace std;
 #include <stdexcept>
 #include <string>
 #include <vector>
+#include <tuple>
+#include <algorithm>
+
+using Color = std::tuple<int, int, int>;
 
 /* return a floating point value specifying what to scale the sample
  * value by to reduce it from full volume to dB decibels */
@@ -1341,36 +1345,25 @@ void output_frame(AVFrame* frame, unsigned long long field_number) {
 	av_packet_unref(&pkt);
 }
 
-void RGB_to_YIQ(int& Y, int& I, int& Q, int r, int g, int b) {
+Color RGB_to_YIQ(Color rgb) {
 	float dY;
+	auto& [r, g, b] = rgb;
 
 	dY = (0.30F * r) + (0.59F * g) + (0.11F * b);
 
-	Y = static_cast<int>(256.F * dY);
-	I = static_cast<int>(256.F * ((-0.27F * (b - dY)) + (0.74F * (r - dY))));
-	Q = static_cast<int>(256.F * ((0.41F * (b - dY)) + (0.48F * (r - dY))));
+	return {256.F * dY, 256.F * ((-0.27F * (b - dY)) + (0.74F * (r - dY))),
+		256.F * ((0.41F * (b - dY)) + (0.48F * (r - dY)))};
 }
 
-void YIQ_to_RGB(int& r, int& g, int& b, int Y, int I, int Q) {
+Color YIQ_to_RGB(Color yiq) {
 	// FIXME
-	r = static_cast<int>(((1.000F * Y) + (0.956F * I) + (0.621F * Q)) / 256);
-	g = static_cast<int>(((1.000F * Y) + (-0.272F * I) + (-0.647F * Q)) / 256);
-	b = static_cast<int>(((1.000F * Y) + (-1.106F * I) + (1.703F * Q)) / 256);
-	if (r < 0) {
-		r = 0;
-	} else if (r > 255) {
-		r = 255;
-	}
-	if (g < 0) {
-		g = 0;
-	} else if (g > 255) {
-		g = 255;
-	}
-	if (b < 0) {
-		b = 0;
-	} else if (b > 255) {
-		b = 255;
-	}
+	auto& [Y, I, Q] = yiq;
+
+	auto r = clamp(static_cast<int>(((1.000F * Y) + (0.956F * I) + (0.621F * Q)) / 256), 0, 255);
+	auto g = clamp(static_cast<int>(((1.000F * Y) + (-0.272F * I) + (-0.647F * Q)) / 256), 0, 255);
+	auto b = clamp(static_cast<int>(((1.000F * Y) + (-1.106F * I) + (1.703F * Q)) / 256), 0, 255);
+
+	return {r, g, b};
 }
 
 /* lighter-weight filtering, probably what your old CRT does to reduce color fringes a bit */
@@ -1561,9 +1554,8 @@ void composite_layer(
 	AVFrame* dstframe, AVFrame* srcframe, InputFile& /*inputfile*/, unsigned int field, unsigned long long fieldno) {
 	unsigned char opposite;
 	uint32_t *	dscan, *sscan;
-	unsigned int  x;
-	unsigned int  y;
 	unsigned int  shr;
+	auto		  dstframe_pixels = dstframe->width * dstframe->height;
 	int *		  fY, *fI, *fQ;
 	int			  r;
 	int			  g;
@@ -1586,24 +1578,25 @@ void composite_layer(
 		opposite = 0;
 	}
 
-	fY = new int[dstframe->width * dstframe->height];
-	fI = new int[dstframe->width * dstframe->height];
-	fQ = new int[dstframe->width * dstframe->height];
+	fY = new int[dstframe_pixels]{0};
+	fI = new int[dstframe_pixels]{0};
+	fQ = new int[dstframe_pixels]{0};
 
-	memset(fY, 0, sizeof(dstframe->width * dstframe->height) * sizeof(int));
-	memset(fI, 0, sizeof(dstframe->width * dstframe->height) * sizeof(int));
-	memset(fQ, 0, sizeof(dstframe->width * dstframe->height) * sizeof(int));
-
-	for (y = field; y < dstframe->height; y += 2) {
+	for (auto y = field; y < dstframe->height; y += 2) {
 		sscan = reinterpret_cast<uint32_t*>(
 			srcframe->data[0] +
 			(srcframe->linesize[0] * std::min(y + opposite, static_cast<unsigned int>(dstframe->height) - 1U)));
-		for (x = 0; x < dstframe->width; x++, dscan++, sscan++) {
+		for (auto x = 0; x < dstframe->width; x++, dscan++, sscan++) {
 			r = (*sscan >> 16UL) & 0xFF;
 			g = (*sscan >> 8UL) & 0xFF;
 			b = (*sscan >> 0UL) & 0xFF;
-			RGB_to_YIQ(
-				fY[(y * dstframe->width) + x], fI[(y * dstframe->width) + x], fQ[(y * dstframe->width) + x], r, g, b);
+
+			auto idx	   = (y * dstframe->width) + x;
+			auto [Y, I, Q] = RGB_to_YIQ(make_tuple(r, g, b));
+
+			fY[idx] = Y;
+			fI[idx] = I;
+			fQ[idx] = Q;
 		}
 	}
 
@@ -1613,7 +1606,7 @@ void composite_layer(
 
 	/* video composite preemphasis */
 	if (composite_preemphasis != 0 && composite_preemphasis_cut > 0) {
-		for (y = field; y < dstframe->height; y += 2) {
+		for (auto y = field; y < dstframe->height; y += 2) {
 			int*		  Y = fY + (y * dstframe->width);
 			LowpassFilter pre;
 			float		  s;
@@ -1621,7 +1614,7 @@ void composite_layer(
 			pre.setFilter(
 				(315000000.00F * 4.F) / 88.F, composite_preemphasis_cut);  // 315/88 Mhz rate * 4  vs 1.0MHz cutoff
 			pre.resetFilter(16.F);
-			for (x = 0; x < dstframe->width; x++) {
+			for (auto x = 0; x < dstframe->width; x++) {
 				s = Y[x];
 				s += pre.highpass(s) * composite_preemphasis;
 				Y[x] = static_cast<int>(s);
@@ -1634,10 +1627,10 @@ void composite_layer(
 		int noise	 = 0;
 		int noise_mod = (video_noise * 2) + 1; /* ,noise_mod = (video_noise * 255) / 100; */
 
-		for (y = field; y < dstframe->height; y += 2) {
+		for (auto y = field; y < dstframe->height; y += 2) {
 			int* Y = fY + (y * dstframe->width);
 
-			for (x = 0; x < dstframe->width; x++) {
+			for (auto x = 0; x < dstframe->width; x++) {
 				Y[x] += noise;
 				noise += (static_cast<int>(static_cast<unsigned int>(rand()) % noise_mod)) - video_noise;
 				noise /= 2;
@@ -1734,11 +1727,11 @@ void composite_layer(
 		int noiseV	= 0;
 		int noise_mod = (video_chroma_noise * 255) / 100;
 
-		for (y = field; y < dstframe->height; y += 2) {
+		for (auto y = field; y < dstframe->height; y += 2) {
 			int* U = fI + (y * dstframe->width);
 			int* V = fQ + (y * dstframe->width);
 
-			for (x = 0; x < dstframe->width; x++) {
+			for (auto x = 0; x < dstframe->width; x++) {
 				U[x] += noiseU;
 				V[x] += noiseV;
 				noiseU += (static_cast<int>(static_cast<unsigned int>(rand()) % ((video_chroma_noise * 2) + 1))) -
@@ -1761,7 +1754,7 @@ void composite_layer(
 		float sinpi;
 		float cospi;
 
-		for (y = field; y < dstframe->height; y += 2) {
+		for (auto y = field; y < dstframe->height; y += 2) {
 			int* U = fI + (y * dstframe->width);
 			int* V = fQ + (y * dstframe->width);
 
@@ -1773,7 +1766,7 @@ void composite_layer(
 			sinpi = sin(pi);
 			cospi = cos(pi);
 
-			for (x = 0; x < dstframe->width; x++) {
+			for (auto x = 0; x < dstframe->width; x++) {
 				u = U[x];  // think of 'u' as x-coord
 				v = V[x];  // and 'v' as y-coord
 
@@ -1816,7 +1809,7 @@ void composite_layer(
 		};
 
 		// luma lowpass
-		for (y = field; y < dstframe->height; y += 2) {
+		for (auto y = field; y < dstframe->height; y += 2) {
 			int*		  Y = fY + (y * dstframe->width);
 			LowpassFilter lp[3];
 			LowpassFilter pre;
@@ -1828,7 +1821,7 @@ void composite_layer(
 			}
 			pre.setFilter((315000000.00F * 4.F) / 88.F, luma_cut);  // 315/88 Mhz rate * 4  vs 1.0MHz cutoff
 			pre.resetFilter(16.F);
-			for (x = 0; x < dstframe->width; x++) {
+			for (auto x = 0; x < dstframe->width; x++) {
 				s = Y[x];
 				for (auto& f : lp) { s = f.lowpass(s); }
 				s += pre.highpass(s) * 1.6F;
@@ -1837,7 +1830,7 @@ void composite_layer(
 		}
 
 		// chroma lowpass
-		for (y = field; y < dstframe->height; y += 2) {
+		for (auto y = field; y < dstframe->height; y += 2) {
 			int*		  U = fI + (y * dstframe->width);
 			int*		  V = fQ + (y * dstframe->width);
 			LowpassFilter lpU[3];
@@ -1852,7 +1845,7 @@ void composite_layer(
 					chroma_cut);  // 315/88 Mhz rate * 4 (divide by 2 for 4:2:2) vs 400KHz cutoff
 				lpV[f].resetFilter(0.F);
 			}
-			for (x = 0; x < dstframe->width; x++) {
+			for (auto x = 0; x < dstframe->width; x++) {
 				s = U[x];
 				for (auto& f : lpU) { s = f.lowpass(s); }
 				if (x >= chroma_delay) { U[x - chroma_delay] = s; }
@@ -1874,13 +1867,13 @@ void composite_layer(
 
 			memset(delayU, 0, dstframe->width * sizeof(int));
 			memset(delayV, 0, dstframe->width * sizeof(int));
-			for (y = (field + 2); y < dstframe->height; y += 2) {
+			for (auto y = (field + 2); y < dstframe->height; y += 2) {
 				int* U = fI + (y * dstframe->width);
 				int* V = fQ + (y * dstframe->width);
 				int  cU;
 				int  cV;
 
-				for (x = 0; x < dstframe->width; x++) {
+				for (auto x = 0; x < dstframe->width; x++) {
 					cU		  = U[x];
 					cV		  = V[x];
 					U[x]	  = (delayU[x] + cU + 1) >> 1;
@@ -1894,7 +1887,7 @@ void composite_layer(
 		// VHS decks tend to sharpen the picture on playback
 		if (true /*TODO make option*/) {
 			// luma
-			for (y = field; y < dstframe->height; y += 2) {
+			for (auto y = field; y < dstframe->height; y += 2) {
 				int*		  Y = fY + (y * dstframe->width);
 				LowpassFilter lp[3];
 				float		  s;
@@ -1904,7 +1897,7 @@ void composite_layer(
 					f.setFilter((315000000.00F * 4.F) / 88.F, luma_cut * 4.F);  // 315/88 Mhz rate * 4  vs 3.0MHz cutoff
 					f.resetFilter(0.F);
 				}
-				for (x = 0; x < dstframe->width; x++) {
+				for (auto x = 0; x < dstframe->width; x++) {
 					s = ts = Y[x];
 					for (auto& f : lp) { ts = f.lowpass(ts); }
 					Y[x] = s + ((s - ts) * vhs_out_sharpen * 2);
@@ -1919,7 +1912,7 @@ void composite_layer(
 	}
 
 	if (video_chroma_loss != 0) {
-		for (y = field; y < dstframe->height; y += 2) {
+		for (auto y = field; y < dstframe->height; y += 2) {
 			int* U = fI + (y * dstframe->width);
 			int* V = fQ + (y * dstframe->width);
 
@@ -1938,12 +1931,12 @@ void composite_layer(
 		}
 	}
 
-	for (y = field; y < dstframe->height; y += 2) {
+	for (auto y = field; y < dstframe->height; y += 2) {
 		dscan = reinterpret_cast<uint32_t*>(dstframe->data[0] + (dstframe->linesize[0] * y));
-		for (x = 0; x < dstframe->width; x++, dscan++, sscan++) {
-			YIQ_to_RGB(
-				r, g, b, fY[(y * dstframe->width) + x], fI[(y * dstframe->width) + x], fQ[(y * dstframe->width) + x]);
-			*dscan = (r << 16) + (g << 8) + b;
+		for (auto x = 0; x < dstframe->width; x++, dscan++, sscan++) {
+			auto idx	   = (y * dstframe->width) + x;
+			auto [r, g, b] = YIQ_to_RGB(make_tuple(fY[idx], fI[idx], fQ[idx]));
+			*dscan		   = (r << 16) + (g << 8) + b;
 		}
 	}
 
