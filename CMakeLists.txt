@@ -6,6 +6,7 @@ set(CMAKE_CXX_FLAGS_RELEASE "-DNDEBUG -g0 -Ofast -flto")
 set(CMAKE_MODULE_PATH ${CMAKE_MODULE_PATH} ${CMAKE_SOURCE_DIR})
 
 find_package(FFMPEG COMPONENTS avformat avcodec avutil avdevice swscale swresample REQUIRED)
+find_package(Boost COMPONENTS fiber context REQUIRED)
 
 add_executable (ffmpeg_average_delay ffmpeg_average_delay.cpp)
 target_link_libraries(ffmpeg_average_delay ${FFMPEG_LIBRARIES})
@@ -26,8 +27,8 @@ target_link_libraries(ffmpeg_colormap ${FFMPEG_LIBRARIES})
 target_include_directories(ffmpeg_colormap PUBLIC ${FFMPEG_INCLUDE_DIRS})
 
 add_executable (ffmpeg_ntsc ffmpeg_ntsc.cpp)
-target_link_libraries(ffmpeg_ntsc ${FFMPEG_LIBRARIES})
-target_include_directories(ffmpeg_ntsc PUBLIC ${FFMPEG_INCLUDE_DIRS})
+target_link_libraries(ffmpeg_ntsc ${FFMPEG_LIBRARIES} ${Boost_LIBRARIES})
+target_include_directories(ffmpeg_ntsc PUBLIC ${FFMPEG_INCLUDE_DIRS} ${Boost_INCLUDE_DIRS})
 
 add_executable (ffmpeg_posterize ffmpeg_posterize.cpp)
 target_link_libraries(ffmpeg_posterize ${FFMPEG_LIBRARIES})

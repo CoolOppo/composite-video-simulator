@@ -49,7 +49,13 @@ using namespace std;
 #include <tuple>
 #include <algorithm>
 
+#include <boost/fiber/unbuffered_channel.hpp>
+
 using Color = std::tuple<int, int, int>;
+
+using channel_t = boost::fibers::unbuffered_channel<tuple<AVFrame*, unsigned long long int>>;
+
+auto EncoderChannel = new channel_t();
 
 /* return a floating point value specifying what to scale the sample
  * value by to reduce it from full volume to dB decibels */
@@ -1952,6 +1958,13 @@ void composite_layer(
 }
 
 int main(int argc, char** argv) {
+	std::thread EncoderThread([]() {
+		for (auto& params : *EncoderChannel) {
+			auto& [p1, p2] = params;
+			output_frame(p1, p2);
+		}
+	});
+
 	preset_NTSC();
 	if (parse_argv(argc, argv) != 0) { return 1; }
 
@@ -2324,10 +2337,12 @@ int main(int argc, char** argv) {
 					output_avstream_video_frame_index = 0;
 				}
 
-				output_frame(output_avstream_video_encode_frame, current);
+				EncoderChannel->push({output_avstream_video_encode_frame, current});
 				current++;
 			}
 		} while (!eof);
+		EncoderChannel->close();
+		EncoderThread.join();
 	}
 
 	/* flush encoder delay */
