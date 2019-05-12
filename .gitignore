@@ -14,6 +14,8 @@ normalize_ts
 compile_commands.json
 Release/
 Debug/
+cmake-build-release/
+cmake-build-debug/
 
 # IDE
 .ccls-cache/
