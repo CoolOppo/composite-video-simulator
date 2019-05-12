@@ -1,12 +1,3 @@
-
-// NTS: This is not like modern "posterize" filters where the pixels are quantizied to N levels then scaled out to
-// 0..255
-//      That requires a multiply/divide per pixel. Think old-school hardware where such operations were too expensive.
-//      The "posterize" we emulate here is more the type where you run the video through an ADC, truncate the least
-//      significant bits, then run back through a DAC on the other side (well within the realm of 1980s/1990s hardware)
-
-#define __STDC_CONSTANT_MACROS
-
 #include <cassert>
 #include <fcntl.h>
 #include <cmath>
@@ -14,47 +5,28 @@
 #include <cstdint>
 #include <cstdio>
 #include <cstdlib>
-#include <sys/types.h>
-#include <unistd.h>
 
 extern "C"
 {
 #include <libavutil/avutil.h>
 #include <libavutil/opt.h>
 #include <libavutil/pixdesc.h>
-#include <libavutil/pixelutils.h>
-#include <libavutil/pixfmt.h>
-#include <libavutil/samplefmt.h>
-
 #include <libavcodec/avcodec.h>
-#include <libavcodec/version.h>
-
 #include <libavformat/avformat.h>
-#include <libavformat/avio.h>
-#include <libavformat/version.h>
-
 #include <libswscale/swscale.h>
-#include <libswscale/version.h>
-
 #include <libswresample/swresample.h>
-#include <libswresample/version.h>
 }
 
 using namespace std;
 
 #include <map>
-#include <stdexcept>
-#include <string>
 #include <vector>
-#include <tuple>
 #include <algorithm>
 
 #include <boost/fiber/unbuffered_channel.hpp>
 
-using Color = std::tuple<int, int, int>;
-
-using channel_t = boost::fibers::unbuffered_channel<tuple<AVFrame*, unsigned long long int>>;
-
+using Color			= std::tuple<int, int, int>;
+using channel_t		= boost::fibers::unbuffered_channel<tuple<AVFrame*, unsigned long long int>>;
 auto EncoderChannel = new channel_t();
 
 /* return a floating point value specifying what to scale the sample
