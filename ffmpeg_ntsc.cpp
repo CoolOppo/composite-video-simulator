@@ -25,7 +25,7 @@ using namespace std;
 
 #include <boost/fiber/unbuffered_channel.hpp>
 
-using Color			= std::tuple<int, int, int>;
+using Color			= std::tuple<uint8_t, uint8_t, uint8_t>;
 using channel_t		= boost::fibers::unbuffered_channel<tuple<AVFrame*, unsigned long long int>>;
 auto EncoderChannel = new channel_t();
 
@@ -1323,25 +1323,36 @@ void output_frame(AVFrame* frame, unsigned long long field_number) {
 	av_packet_unref(&pkt);
 }
 
-inline Color RGB_to_YIQ(Color rgb) {
-	float dY;
-	auto& [r, g, b] = rgb;
+void RGB_to_YIQ(int& Y, int& I, int& Q, int r, int g, int b) {
+	double dY;
 
-	dY = (0.30F * r) + (0.59F * g) + (0.11F * b);
+	dY = (0.30 * r) + (0.59 * g) + (0.11 * b);
 
-	return {256.F * dY, 256.F * ((-0.27F * (b - dY)) + (0.74F * (r - dY))),
-		256.F * ((0.41F * (b - dY)) + (0.48F * (r - dY)))};
+	Y = static_cast<int>(256 * dY);
+	I = static_cast<int>(256 * ((-0.27 * (b - dY)) + (0.74 * (r - dY))));
+	Q = static_cast<int>(256 * ((0.41 * (b - dY)) + (0.48 * (r - dY))));
 }
 
-inline Color YIQ_to_RGB(Color yiq) {
+void YIQ_to_RGB(int& r, int& g, int& b, int Y, int I, int Q) {
 	// FIXME
-	auto& [Y, I, Q] = yiq;
-
-	auto r = clamp(static_cast<int>(((1.000F * Y) + (0.956F * I) + (0.621F * Q)) / 256), 0, 255);
-	auto g = clamp(static_cast<int>(((1.000F * Y) + (-0.272F * I) + (-0.647F * Q)) / 256), 0, 255);
-	auto b = clamp(static_cast<int>(((1.000F * Y) + (-1.106F * I) + (1.703F * Q)) / 256), 0, 255);
-
-	return {r, g, b};
+	r = static_cast<int>(((1.000 * Y) + (0.956 * I) + (0.621 * Q)) / 256);
+	g = static_cast<int>(((1.000 * Y) + (-0.272 * I) + (-0.647 * Q)) / 256);
+	b = static_cast<int>(((1.000 * Y) + (-1.106 * I) + (1.703 * Q)) / 256);
+	if (r < 0) {
+		r = 0;
+	} else if (r > 255) {
+		r = 255;
+	}
+	if (g < 0) {
+		g = 0;
+	} else if (g > 255) {
+		g = 255;
+	}
+	if (b < 0) {
+		b = 0;
+	} else if (b > 255) {
+		b = 255;
+	}
 }
 
 /* lighter-weight filtering, probably what your old CRT does to reduce color fringes a bit */
@@ -1575,12 +1586,8 @@ void composite_layer(
 			g = pixel[1];
 			r = pixel[2];
 
-			auto idx	   = (row * dstframe->width) + col;
-			auto [Y, I, Q] = RGB_to_YIQ(make_tuple(r, g, b));
-
-			fY[idx] = Y;
-			fI[idx] = I;
-			fQ[idx] = Q;
+			auto idx = (row * dstframe->width) + col;
+			RGB_to_YIQ(fY[idx], fI[idx], fQ[idx], r, g, b);
 		}
 	}
 
@@ -1918,9 +1925,10 @@ void composite_layer(
 	for (auto y = field; y < dstframe->height; y += 2) {
 		auto dscan = reinterpret_cast<uint32_t*>(dstframe->data[0] + (dstframe->linesize[0] * y));
 		for (auto x = 0; x < dstframe->width; x++, dscan++) {
-			auto idx	   = (y * dstframe->width) + x;
-			auto [r, g, b] = YIQ_to_RGB(make_tuple(fY[idx], fI[idx], fQ[idx]));
-			*dscan		   = (r << 16) + (g << 8) + b;
+			auto idx = (y * dstframe->width) + x;
+			int  r, g, b;
+			YIQ_to_RGB(r, g, b, fY[idx], fI[idx], fQ[idx]);
+			*dscan = (r << 16) + (g << 8) + b;
 		}
 	}
 
