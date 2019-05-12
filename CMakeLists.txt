@@ -1,11 +1,11 @@
 cmake_minimum_required (VERSION 3.13.4)
 project (composite-video-simulator LANGUAGES CXX)
 set(CMAKE_CXX_STANDARD 17)
-set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -march=native -Wno-deprecated-declarations")
+set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -march=native -Wno-deprecated-declarations -fopenmp")
 set(CMAKE_CXX_FLAGS_RELEASE "-DNDEBUG -g0 -Ofast -flto")
 set(CMAKE_MODULE_PATH ${CMAKE_MODULE_PATH} ${CMAKE_SOURCE_DIR})
 
-find_package(FFMPEG COMPONENTS avformat avcodec avutil avdevice swscale swresample REQUIRED) #add here the list of ffmpeg components required
+find_package(FFMPEG COMPONENTS avformat avcodec avutil avdevice swscale swresample REQUIRED)
 
 add_executable (ffmpeg_average_delay ffmpeg_average_delay.cpp)
 target_link_libraries(ffmpeg_average_delay ${FFMPEG_LIBRARIES})

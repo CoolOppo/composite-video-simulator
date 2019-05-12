@@ -1581,18 +1581,23 @@ void composite_layer(
 	fI = new int[dstframe_pixels]{0};
 	fQ = new int[dstframe_pixels]{0};
 
-	for (auto y = field; y < dstframe->height; y += 2) {
-		for (auto x = 0; x < dstframe->width; x++) {
-			auto sscan =
-				reinterpret_cast<uint32_t*>(
-					srcframe->data[0] + (srcframe->linesize[0] *
-											std::min(y + opposite, static_cast<unsigned int>(dstframe->height) - 1U))) +
-				x;
-			r = (*sscan >> 16UL) & 0xFF;
-			g = (*sscan >> 8UL) & 0xFF;
-			b = (*sscan >> 0UL) & 0xFF;
+	for (auto row = field; row < dstframe->height; row += 2) {
+		for (auto col = 0; col < dstframe->width; col++) {
+			/*Getting the pixel location is a bit complicated, because each line from srcframe->data[0] has padding
+			 * added to it. We have to use `linesize` to get how many bytes each line actually takes up and index into
+			 * the pixel buffer with that.*/
+			auto pixel = reinterpret_cast<uint8_t*>(
+							 srcframe->data[0] +	   // start of pixel buffer
+							 (srcframe->linesize[0] *  // size of row of pixels, including padding
+								 std::min(row + opposite, static_cast<unsigned int>(dstframe->height) - 1U))) +
+						 (col * 4);  // There are 4 1-byte colors per pixel
 
-			auto idx	   = (y * dstframe->width) + x;
+			// Colors in srcframe are actually BGRA
+			b = pixel[0];
+			g = pixel[1];
+			r = pixel[2];
+
+			auto idx	   = (row * dstframe->width) + col;
 			auto [Y, I, Q] = RGB_to_YIQ(make_tuple(r, g, b));
 
 			fY[idx] = Y;
