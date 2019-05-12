@@ -1582,10 +1582,12 @@ void composite_layer(
 	fQ = new int[dstframe_pixels]{0};
 
 	for (auto y = field; y < dstframe->height; y += 2) {
-		auto sscan = reinterpret_cast<uint32_t*>(
-			srcframe->data[0] +
-			(srcframe->linesize[0] * std::min(y + opposite, static_cast<unsigned int>(dstframe->height) - 1U)));
-		for (auto x = 0; x < dstframe->width; x++, sscan++) {
+		for (auto x = 0; x < dstframe->width; x++) {
+			auto sscan =
+				reinterpret_cast<uint32_t*>(
+					srcframe->data[0] + (srcframe->linesize[0] *
+											std::min(y + opposite, static_cast<unsigned int>(dstframe->height) - 1U))) +
+				x;
 			r = (*sscan >> 16UL) & 0xFF;
 			g = (*sscan >> 8UL) & 0xFF;
 			b = (*sscan >> 0UL) & 0xFF;
