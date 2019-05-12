@@ -1345,7 +1345,7 @@ void output_frame(AVFrame* frame, unsigned long long field_number) {
 	av_packet_unref(&pkt);
 }
 
-Color RGB_to_YIQ(Color rgb) {
+inline Color RGB_to_YIQ(Color rgb) {
 	float dY;
 	auto& [r, g, b] = rgb;
 
@@ -1355,7 +1355,7 @@ Color RGB_to_YIQ(Color rgb) {
 		256.F * ((0.41F * (b - dY)) + (0.48F * (r - dY)))};
 }
 
-Color YIQ_to_RGB(Color yiq) {
+inline Color YIQ_to_RGB(Color yiq) {
 	// FIXME
 	auto& [Y, I, Q] = yiq;
 
@@ -1553,7 +1553,6 @@ void chroma_from_luma(AVFrame* dstframe, int* fY, int* fI, int* fQ, unsigned int
 void composite_layer(
 	AVFrame* dstframe, AVFrame* srcframe, InputFile& /*inputfile*/, unsigned int field, unsigned long long fieldno) {
 	unsigned char opposite;
-	uint32_t *	dscan, *sscan;
 	unsigned int  shr;
 	auto		  dstframe_pixels = dstframe->width * dstframe->height;
 	int *		  fY, *fI, *fQ;
@@ -1583,10 +1582,10 @@ void composite_layer(
 	fQ = new int[dstframe_pixels]{0};
 
 	for (auto y = field; y < dstframe->height; y += 2) {
-		sscan = reinterpret_cast<uint32_t*>(
+		auto sscan = reinterpret_cast<uint32_t*>(
 			srcframe->data[0] +
 			(srcframe->linesize[0] * std::min(y + opposite, static_cast<unsigned int>(dstframe->height) - 1U)));
-		for (auto x = 0; x < dstframe->width; x++, dscan++, sscan++) {
+		for (auto x = 0; x < dstframe->width; x++, sscan++) {
 			r = (*sscan >> 16UL) & 0xFF;
 			g = (*sscan >> 8UL) & 0xFF;
 			b = (*sscan >> 0UL) & 0xFF;
@@ -1932,8 +1931,8 @@ void composite_layer(
 	}
 
 	for (auto y = field; y < dstframe->height; y += 2) {
-		dscan = reinterpret_cast<uint32_t*>(dstframe->data[0] + (dstframe->linesize[0] * y));
-		for (auto x = 0; x < dstframe->width; x++, dscan++, sscan++) {
+		auto dscan = reinterpret_cast<uint32_t*>(dstframe->data[0] + (dstframe->linesize[0] * y));
+		for (auto x = 0; x < dstframe->width; x++, dscan++) {
 			auto idx	   = (y * dstframe->width) + x;
 			auto [r, g, b] = YIQ_to_RGB(make_tuple(fY[idx], fI[idx], fQ[idx]));
 			*dscan		   = (r << 16) + (g << 8) + b;
