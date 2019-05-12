@@ -5,6 +5,8 @@
 //      The "posterize" we emulate here is more the type where you run the video through an ADC, truncate the least
 //      significant bits, then run back through a DAC on the other side (well within the realm of 1980s/1990s hardware)
 
+#define __STDC_CONSTANT_MACROS
+
 #include <cassert>
 #include <fcntl.h>
 #include <cmath>
@@ -12,22 +14,39 @@
 #include <cstdint>
 #include <cstdio>
 #include <cstdlib>
+#include <sys/types.h>
+#include <unistd.h>
 
 extern "C"
 {
 #include <libavutil/avutil.h>
 #include <libavutil/opt.h>
 #include <libavutil/pixdesc.h>
+#include <libavutil/pixelutils.h>
+#include <libavutil/pixfmt.h>
+#include <libavutil/samplefmt.h>
+
 #include <libavcodec/avcodec.h>
+#include <libavcodec/version.h>
+
 #include <libavformat/avformat.h>
+#include <libavformat/avio.h>
+#include <libavformat/version.h>
+
 #include <libswscale/swscale.h>
+#include <libswscale/version.h>
+
 #include <libswresample/swresample.h>
+#include <libswresample/version.h>
 }
 
 using namespace std;
 
 #include <map>
+#include <stdexcept>
+#include <string>
 #include <vector>
+#include <tuple>
 #include <algorithm>
 
 using Color = std::tuple<int, int, int>;
@@ -41,6 +60,13 @@ float dBFS(float dB) {
 	   where "sample" is -1.0 <= x <= 1.0 */
 	return pow(10.0F, dB / 20.0F);
 }
+
+/* attenuate a sample value by this many dBFS */
+/* so if you want to reduce it by 20dBFS you pass -20 as dB */
+float attenuate_dBFS(float sample, float dB) { return sample * dBFS(dB); }
+
+/* opposite: convert sample to decibels */
+float dBFS_measure(float sample) { return 20.0F * log10(sample); }
 
 // lowpass filter
 // you can make it a highpass filter by applying a lowpass then subtracting from source.
@@ -86,6 +112,7 @@ public:
 		lo.setFilter(rate, low_hz);
 		hi.setFilter(rate, high_hz);
 	}
+	float filter(const float sample) { return hi.highpass(lo.lowpass(sample)); /* first lowpass, then highpass */ }
 };
 
 class HiLoPass : public vector<HiLoPair>
@@ -687,6 +714,8 @@ public:
 	AVPixelFormat	  input_avstream_video_resampler_format;
 	int				   input_avstream_video_resampler_height{};
 	int				   input_avstream_video_resampler_width{};
+	signed long long   next_pts;
+	signed long long   next_dts;
 	AVPacket		   avpkt{};
 	bool			   avpkt_valid;
 	float			   adj_time{};
@@ -751,6 +780,7 @@ bool composite_out_chroma_lowpass	  = true;
 bool composite_out_chroma_lowpass_lite = true;
 
 int   video_yc_recombine		= 0;  // additional Y/C combine/sep phases (testing)
+int   video_color_fields		= 4;  // NTSC color framing
 int   video_chroma_noise		= 0;
 int   video_chroma_phase_noise  = 0;
 int   video_chroma_loss			= 0;
@@ -1173,7 +1203,6 @@ static int parse_argv(int argc, char** argv) {
 			output_audio_channels = 2;
 		} else if (output_vhs_linear_audio) {
 			switch (output_vhs_tape_speed) {
-				default:
 				case VHS_SP:
 					output_audio_highpass = 100;	// highpass to filter out below 100Hz
 					output_audio_lowpass  = 10000;  // lowpass to filter out above 10KHz
@@ -1524,6 +1553,7 @@ void chroma_from_luma(AVFrame* dstframe, int* fY, int* fI, int* fQ, unsigned int
 void composite_layer(
 	AVFrame* dstframe, AVFrame* srcframe, InputFile& /*inputfile*/, unsigned int field, unsigned long long fieldno) {
 	unsigned char opposite;
+	unsigned int  shr;
 	auto		  dstframe_pixels = dstframe->width * dstframe->height;
 	int *		  fY, *fI, *fQ;
 	int			  r;
@@ -1551,15 +1581,15 @@ void composite_layer(
 	fI = new int[dstframe_pixels]{0};
 	fQ = new int[dstframe_pixels]{0};
 
-	// #pragma omp parallel for
 	for (auto row = field; row < dstframe->height; row += 2) {
 		for (auto col = 0; col < dstframe->width; col++) {
-			/* Getting the pixel location is a bit complicated, because each line from srcframe->data[0] has padding
+			/*Getting the pixel location is a bit complicated, because each line from srcframe->data[0] has padding
 			 * added to it. We have to use `linesize` to get how many bytes each line actually takes up and index into
 			 * the pixel buffer with that.*/
-			auto pixel = srcframe->data[0] +	   // start of pixel buffer
-						 (srcframe->linesize[0] *  // size of row of pixels, including padding
-							 std::min(row + opposite, static_cast<unsigned int>(dstframe->height) - 1U)) +
+			auto pixel = reinterpret_cast<uint8_t*>(
+							 srcframe->data[0] +	   // start of pixel buffer
+							 (srcframe->linesize[0] *  // size of row of pixels, including padding
+								 std::min(row + opposite, static_cast<unsigned int>(dstframe->height) - 1U))) +
 						 (col * 4);  // There are 4 1-byte colors per pixel
 
 			// Colors in srcframe are actually BGRA
@@ -1568,7 +1598,7 @@ void composite_layer(
 			r = pixel[2];
 
 			auto idx	   = (row * dstframe->width) + col;
-			auto [Y, I, Q] = RGB_to_YIQ({r, g, b});
+			auto [Y, I, Q] = RGB_to_YIQ(make_tuple(r, g, b));
 
 			fY[idx] = Y;
 			fI[idx] = I;
@@ -1699,8 +1729,10 @@ void composite_layer(
 
 	/* add video noise */
 	if (video_chroma_noise != 0) {
-		int noiseU = 0;
-		int noiseV = 0;
+		int noiseU	= 0;
+		int noiseV	= 0;
+		int noise_mod = (video_chroma_noise * 255) / 100;
+
 		for (auto y = field; y < dstframe->height; y += 2) {
 			int* U = fI + (y * dstframe->width);
 			int* V = fQ + (y * dstframe->width);
@@ -1718,7 +1750,8 @@ void composite_layer(
 		}
 	}
 	if (video_chroma_phase_noise != 0) {
-		int   noise = 0;
+		int   noise		= 0;
+		int   noise_mod = (video_chroma_noise * 255) / 100;
 		float pi;
 		float u;
 		float v;
@@ -1779,7 +1812,7 @@ void composite_layer(
 				chroma_delay = 14;
 				break;
 			default: abort();
-		}
+		};
 
 		// luma lowpass
 		for (auto y = field; y < dstframe->height; y += 2) {
@@ -1858,21 +1891,23 @@ void composite_layer(
 		}
 
 		// VHS decks tend to sharpen the picture on playback
-		// luma
-		for (auto y = field; y < dstframe->height; y += 2) {
-			int*		  Y = fY + (y * dstframe->width);
-			LowpassFilter lp[3];
-			float		  s;
-			float		  ts;
+		if (true /*TODO make option*/) {
+			// luma
+			for (auto y = field; y < dstframe->height; y += 2) {
+				int*		  Y = fY + (y * dstframe->width);
+				LowpassFilter lp[3];
+				float		  s;
+				float		  ts;
 
-			for (auto& f : lp) {
-				f.setFilter((315000000.00F * 4.F) / 88.F, luma_cut * 4.F);  // 315/88 Mhz rate * 4  vs 3.0MHz cutoff
-				f.resetFilter(0.F);
-			}
-			for (auto x = 0; x < dstframe->width; x++) {
-				s = ts = Y[x];
-				for (auto& f : lp) { ts = f.lowpass(ts); }
-				Y[x] = s + ((s - ts) * vhs_out_sharpen * 2);
+				for (auto& f : lp) {
+					f.setFilter((315000000.00F * 4.F) / 88.F, luma_cut * 4.F);  // 315/88 Mhz rate * 4  vs 3.0MHz cutoff
+					f.resetFilter(0.F);
+				}
+				for (auto x = 0; x < dstframe->width; x++) {
+					s = ts = Y[x];
+					for (auto& f : lp) { ts = f.lowpass(ts); }
+					Y[x] = s + ((s - ts) * vhs_out_sharpen * 2);
+				}
 			}
 		}
 
@@ -1906,7 +1941,7 @@ void composite_layer(
 		auto dscan = reinterpret_cast<uint32_t*>(dstframe->data[0] + (dstframe->linesize[0] * y));
 		for (auto x = 0; x < dstframe->width; x++, dscan++) {
 			auto idx	   = (y * dstframe->width) + x;
-			auto [r, g, b] = YIQ_to_RGB({fY[idx], fI[idx], fQ[idx]});
+			auto [r, g, b] = YIQ_to_RGB(make_tuple(fY[idx], fI[idx], fQ[idx]));
 			*dscan		   = (r << 16) + (g << 8) + b;
 		}
 	}
