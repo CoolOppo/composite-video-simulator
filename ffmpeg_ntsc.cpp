@@ -24,6 +24,9 @@ using namespace std;
 #include <algorithm>
 
 #include <boost/fiber/unbuffered_channel.hpp>
+#include <arrayfire.h>
+#include <af/util.h>
+using namespace af;
 
 using Color			= std::tuple<uint8_t, uint8_t, uint8_t>;
 using channel_t		= boost::fibers::unbuffered_channel<tuple<AVFrame*, unsigned long long int>>;
@@ -1538,16 +1541,27 @@ void chroma_from_luma(AVFrame* dstframe, int* fY, int* fI, int* fQ, unsigned int
 	}
 }
 
+af::array bgra2yiq(af::array bgra) {
+	af::array yiq(3, s32);
+
+	auto dY = (0.30 * bgra(2)) + (0.59 * bgra(1)) + (0.11 * bgra(0));
+
+	yiq(0) = 256 * dY;
+	yiq(1) = 256 * ((-0.27 * (bgra(0) - dY)) + (0.74 * (bgra(2) - dY)));
+	yiq(2) = 256 * ((0.41 * (bgra(0) - dY)) + (0.48 * (bgra(2) - dY)));
+	return yiq;
+}
+
 // This code assumes ARGB and the frame match resolution/
 void composite_layer(
 	AVFrame* dstframe, AVFrame* srcframe, InputFile& /*inputfile*/, unsigned int field, unsigned long long fieldno) {
 	unsigned char opposite;
 	unsigned int  shr;
 	auto		  dstframe_pixels = dstframe->width * dstframe->height;
-	int *		  fY, *fI, *fQ;
-	int			  r;
-	int			  g;
-	int			  b;
+	//	int *		  fY, *fI, *fQ;
+	int r;
+	int g;
+	int b;
 
 	if (dstframe == nullptr || srcframe == nullptr) { return; }
 	if (dstframe->data[0] == nullptr || srcframe->data[0] == nullptr) { return; }
@@ -1566,30 +1580,26 @@ void composite_layer(
 		opposite = 0;
 	}
 
-	fY = new int[dstframe_pixels]{0};
-	fI = new int[dstframe_pixels]{0};
-	fQ = new int[dstframe_pixels]{0};
+	af::array buffer(dstframe->height, dstframe->linesize[0], srcframe->data[0]);
+	buffer = buffer.cols(0, (dstframe->width * 4) - 1);
+	buffer = moddims(buffer, 4, dstframe->height, dstframe->width);
+	buffer = reorder(buffer, 1, 2, 0);  // height, width, colors
 
-	for (auto row = field; row < dstframe->height; row += 2) {
-		for (auto col = 0; col < dstframe->width; col++) {
-			/*Getting the pixel location is a bit complicated, because each line from srcframe->data[0] has padding
-			 * added to it. We have to use `linesize` to get how many bytes each line actually takes up and index into
-			 * the pixel buffer with that.*/
-			auto pixel = reinterpret_cast<uint8_t*>(
-							 srcframe->data[0] +	   // start of pixel buffer
-							 (srcframe->linesize[0] *  // size of row of pixels, including padding
-								 std::min(row + opposite, static_cast<unsigned int>(dstframe->height) - 1U))) +
-						 (col * 4);  // There are 4 1-byte colors per pixel
+	af::array yiq(dstframe->height, dstframe->width, 3, s32);
+	for (auto r = field; r < dstframe->height; r += 2) {
+		int real_r = std::min(r + opposite, (unsigned int)dstframe->height - 1);
+		gfor(af::seq c, dstframe->width) {
+			auto dY = (0.30 * buffer(r, c, 2)) + (0.59 * buffer(r, c, 1)) + (0.11 * buffer(r, c, 0));
 
-			// Colors in srcframe are actually BGRA
-			b = pixel[0];
-			g = pixel[1];
-			r = pixel[2];
-
-			auto idx = (row * dstframe->width) + col;
-			RGB_to_YIQ(fY[idx], fI[idx], fQ[idx], r, g, b);
+			yiq(r, c, 1) = 256 * ((-0.27 * (buffer(real_r, c, 0) - dY)) + (0.74 * (buffer(real_r, c, 2) - dY)));
+			yiq(r, c, 2) = 256 * ((0.41 * (buffer(real_r, c, 0) - dY)) + (0.48 * (buffer(real_r, c, 2) - dY)));
+			yiq(r, c, 0) = 256 * dY;
 		}
 	}
+
+	int* fY = yiq(span, span, 0).host<int>();
+	int* fI = yiq(span, span, 1).host<int>();
+	int* fQ = yiq(span, span, 2).host<int>();
 
 	if (composite_in_chroma_lowpass) { composite_lowpass(dstframe, fY, fI, fQ, field, fieldno); }
 
