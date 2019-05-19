@@ -1553,7 +1553,7 @@ af::array bgra2yiq(af::array bgra) {
 }
 
 // This code assumes ARGB and the frame match resolution/
-void composite_layer(
+inline void composite_layer(
 	AVFrame* dstframe, AVFrame* srcframe, InputFile& /*inputfile*/, unsigned int field, unsigned long long fieldno) {
 	unsigned char opposite;
 	unsigned int  shr;
